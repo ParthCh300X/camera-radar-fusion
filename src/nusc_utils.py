@@ -30,7 +30,7 @@ def project_radar(nusc, root, sample):
     uv = view_points(pc.points[:3], np.array(cs["camera_intrinsic"]), normalize=True)
     return pc.points, uv
 
-def boxes_2d(nusc, sample, W=1600, H=900, min_vis=2, min_w=8, min_h=12):
+def boxes_2d(nusc, sample, W=1600, H=900, min_vis=2, min_w=12, min_h=25):
     """GT 3D boxes -> 2D boxes (cls, x1, y1, x2, y2) in CAM_FRONT pixels, 3 classes."""
     _, boxes, K = nusc.get_sample_data(sample["data"]["CAM_FRONT"])
     out = []
