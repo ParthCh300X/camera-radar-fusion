@@ -29,3 +29,10 @@ chunk | scenes | samples | missing CAM_FRONT | missing RADAR_FRONT
     9 |     47 |    1900 |                 0 |                   0
    10 |     25 |    1004 |                 0 |                   0
 (.venv) PS D:\camera-radar-fusion> 
+
+DONE: 2904 samples, mean radar points/sample 97.9
+train images: 1611 boxes: {'car': 4671, 'pedestrian': 2143, 'truck': 333} | images by condition: {'clear': 646, 'rain': 321, 'night': 644}
+val images: 406 boxes: {'car': 1207, 'pedestrian': 560, 'truck': 78} | images by condition: {'clear': 164, 'rain': 81, 'night': 161}
+test images: 887 boxes: {'car': 2284, 'pedestrian': 491, 'truck':440} | images by condition: {'clear': 325, 'rain': 242, 'night': 320}
+(.venv) PS D:\camera-radar-fusion> python -c "from src.dataset import FusionDataset; r=r'data\processed\subset'; print({s: len(FusionDataset(r, s)) for s in ('train','val','test')})"
+{'train': 1611, 'val': 406, 'test': 887}
