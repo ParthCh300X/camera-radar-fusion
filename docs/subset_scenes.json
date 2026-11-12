@@ -1,0 +1,440 @@
+{
+ "train": [
+  {
+   "scene": "scene-0894",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0896",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0897",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0898",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0900",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0901",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0902",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0903",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0945",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0949",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0952",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0953",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0955",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0956",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0957",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0960",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0961",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0977",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0980",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0981",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0983",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0984",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0988",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0989",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0996",
+   "condition": "night",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1002",
+   "condition": "night",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1003",
+   "condition": "night",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-1007",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1015",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1020",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1050",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1051",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1058",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1078",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1084",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 41
+  },
+  {
+   "scene": "scene-1085",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 41
+  },
+  {
+   "scene": "scene-1091",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 41
+  },
+  {
+   "scene": "scene-1095",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1099",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1100",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  }
+ ],
+ "val": [
+  {
+   "scene": "scene-0895",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0899",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0959",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0978",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0982",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0991",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-1009",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 41
+  },
+  {
+   "scene": "scene-1010",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1097",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1106",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  }
+ ],
+ "test": [
+  {
+   "scene": "scene-0906",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0908",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0909",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0911",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0912",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0913",
+   "condition": "rain",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0921",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0926",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0929",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0931",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0963",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 40
+  },
+  {
+   "scene": "scene-0966",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0968",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-0972",
+   "condition": "clear",
+   "chunk": 9,
+   "samples": 41
+  },
+  {
+   "scene": "scene-1063",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1064",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1065",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1067",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1068",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1069",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1071",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  },
+  {
+   "scene": "scene-1072",
+   "condition": "night",
+   "chunk": 10,
+   "samples": 40
+  }
+ ]
+}
