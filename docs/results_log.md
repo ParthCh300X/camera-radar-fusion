@@ -152,3 +152,18 @@ TBD (Phases 8 and 9).
 - `maps_scene-0061.png`, `maps_scene-1077.png`: camera, D, V and M maps
 - `boxes_radar.png`: ground-truth 2D boxes with radar strips, day and night (mini val)
 - `b0_stock_curves.png`: B0 training curves (to add after the run)
+
+50 epochs completed in 1.186 hours.
+Optimizer stripped from outputs\logs\b0_stock\weights\last.pt, 5.6MB
+Optimizer stripped from outputs\logs\b0_stock\weights\best.pt, 5.6MB
+
+Validating outputs\logs\b0_stock\weights\best.pt...
+Ultralytics 8.3.0 🚀 Python-3.11.9 torch-2.7.1+cu128 CUDA:0 (NVIDIA GeForce RTX 2050, 4096MiB)
+Model summary (fused): 186 layers, 2,684,953 parameters, 0 gradients, 6.8 GFLOPs
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100%|██████████| 13/13 [00:05<00:00,  2.25it/s]
+                   all        406       1845      0.847      0.554      0.639      0.372
+                   car        287       1207      0.846      0.633      0.748      0.442
+            pedestrian        245        560      0.854      0.439      0.548      0.296
+                 truck         62         78      0.841       0.59      0.621      0.378
+Speed: 2.3ms preprocess, 2.9ms inference, 0.0ms loss, 3.8ms postprocess per image
+Results saved to outputs\logs\b0_stock
