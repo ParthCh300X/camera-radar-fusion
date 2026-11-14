@@ -9,6 +9,7 @@ from ultralytics.utils.ops import non_max_suppression
 from ultralytics.utils.metrics import ap_per_class
 from src.dataset import FusionDataset, collate
 from src.corruptions import make_corruption
+from src.corruptions import make_corruption, ALL_CONDITIONS
 
 ROOT = os.path.join(PROJ, "data", "processed", "subset")
 
@@ -55,6 +56,7 @@ def main():
     ap.add_argument("--final", action="store_true")
     ap.add_argument("--batch", type=int, default=16)
     a = ap.parse_args()
+    conds = ["clean" if k == "clean" else "%s:%s" % (k, l) for k, l in ALL_CONDITIONS] if a.conds == ["all"] else a.conds
     if a.split == "test" and not a.final:
         sys.exit("The test split is for the final evaluation only: add --final if this is it.")
     dev = torch.device("cuda")
@@ -66,7 +68,7 @@ def main():
     print("%-12s %-18s | mAP50 mAP50-95 | car   ped   truck | clear rain  night" % ("model", "condition"))
     for name in a.models:
         net, filt = load(name, dev)
-        for c in a.conds:
+        for c in conds:
             kind, level = (c.split(":") + [None])[:2]
             m50, m5095, per, byc = run(net, filt, a.split, kind, level, dev, a.batch)
             print("%-12s %-18s | %.3f  %.3f    | %.3f %.3f %.3f | %.3f %.3f %.3f" % (
