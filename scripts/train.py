@@ -14,6 +14,7 @@ from ultralytics.utils.loss import v8DetectionLoss
 from ultralytics.utils.ops import non_max_suppression
 from ultralytics.utils.metrics import ap_per_class, box_iou
 from src.dataset import FusionDataset, collate
+from src.corruptions import random_corruption
 
 H0, W, HP, PAD = 360, 640, 384, 12
 IOUV = torch.linspace(0.5, 0.95, 10)
@@ -77,6 +78,15 @@ def evaluate(net, loader, dev):
     per = {NAMES[int(c)]: float(ap[i, 0]) for i, c in enumerate(classes)}
     return float(ap[:, 0].mean()), float(ap.mean()), per
 
+def degrade_camera(imgs):
+    """Night-like degradation on ~30% of training images: darken (gain 0.15-0.5) and add noise."""
+    out = imgs.clone()
+    for i in range(len(out)):
+        if np.random.rand() < 0.3:
+            g = np.random.uniform(0.15, 0.5)
+            out[i] = (out[i] * g + torch.randn_like(out[i]) * 0.03).clamp(0, 1)
+    return out
+
 def build_detector():
     det = DetectionModel("yolov8n.yaml", nc=3, verbose=False)
     sd = torch.load(os.path.join(PROJ, "yolov8n.pt"), map_location="cpu", weights_only=False)["model"].float().state_dict()
@@ -95,10 +105,11 @@ class RadarEncoder(nn.Module):
         self.stem = nn.Sequential(Conv(3, 16, 3, 2), Conv(16, 32, 3, 2), Conv(32, 64, 3, 2))
         self.s16, self.s32 = Conv(64, 128, 3, 2), Conv(128, 256, 3, 2)
         self.adapt = nn.ModuleDict({"4": zconv(64), "6": zconv(128), "9": zconv(256)})
+
     def forward(self, r):
         p3 = self.stem(r); p4 = self.s16(p3); p5 = self.s32(p4)
+        self.raw = {"4": p3, "6": p4, "9": p5}
         return {"4": self.adapt["4"](p3), "6": self.adapt["6"](p4), "9": self.adapt["9"](p5)}
-
 class Net(nn.Module):
     def __init__(self, mode, channels):
         super().__init__()
@@ -111,8 +122,13 @@ class Net(nn.Module):
             with torch.no_grad():
                 new.weight.zero_(); new.weight[:, :3] = c0.weight
             self.det.model[0].conv = new
-        if mode == "b2":
+        if mode in ("b2", "b3"):
             self.enc = RadarEncoder()
+        if mode == "b3":
+            self.gate = nn.ModuleList([nn.Conv2d(c * 2 + 1, 1, 1) for c in (64, 128, 256)])
+            for g in self.gate:
+                nn.init.zeros_(g.weight); nn.init.constant_(g.bias, 2.0)   # gate starts open (sigmoid(2) = 0.88)
+            self.gates = [None, None, None]
 
     def forward(self, imgs, radars):
         radars = radars * self.cmask.view(1, 3, 1, 1)
@@ -127,13 +143,21 @@ class Net(nn.Module):
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]
             x = m(x)
             if str(m.i) in feats:
-                x = x + feats[str(m.i)]
+                k = str(m.i)
+                if self.mode == "b3":
+                    j, s = {"4": (0, 8), "6": (1, 16), "9": (2, 32)}[k]
+                    mk = F.avg_pool2d(radars[:, 2:3], s, s)           # validity mask M at this stride
+                    gate = torch.sigmoid(self.gate[j](torch.cat([x, self.enc.raw[k], mk], 1)))
+                    self.gates[j] = gate
+                    x = x + gate * feats[k]
+                else:
+                    x = x + feats[k]
             y.append(x if m.i in self.det.save else None)
         return x
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="b0", choices=["b0", "b1", "b2"])
+    ap.add_argument("--model", default="b0", choices=["b0", "b1", "b2", "b3"])
     ap.add_argument("--name", default=None)
     ap.add_argument("--channels", default="dvm")
     ap.add_argument("--filtered", action="store_true")
@@ -141,13 +165,14 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--overfit", action="store_true")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--aug", action="store_true")
     a = ap.parse_args()
     name = a.name or a.model
     torch.manual_seed(0); np.random.seed(0)
     dev = torch.device("cuda")
     root = os.path.join(PROJ, "data", "processed", "subset")
     cor = keep_valid if a.filtered else None
-    tr = FusionDataset(root, "train", corrupt=cor); va = FusionDataset(root, "val", corrupt=cor)
+    tr = FusionDataset(root, "train", corrupt=(random_corruption if a.aug else cor)); va = FusionDataset(root, "val", corrupt=cor)
     tl = DataLoader(tr, batch_size=a.batch, shuffle=True, collate_fn=collate, num_workers=4, drop_last=True)
     vl = DataLoader(va, batch_size=a.batch, shuffle=False, collate_fn=collate, num_workers=2)
     net = Net(a.model, a.channels).to(dev); crit = v8DetectionLoss(net.det)
@@ -186,6 +211,8 @@ def main():
             for g in opt.param_groups: g["lr"] = 1.4e-3 * lr_scale
             flip = torch.rand(len(imgs)) < 0.5
             imgs[flip] = imgs[flip].flip(-1); radars[flip] = radars[flip].flip(-1)
+            if a.aug:
+                imgs = degrade_camera(imgs)
             labs = [l.clone() for l in labs]
             for i in torch.nonzero(flip).flatten().tolist():
                 if len(labs[i]): labs[i][:, 1] = 1 - labs[i][:, 1]
@@ -198,11 +225,13 @@ def main():
         acc /= len(tl); sec = time.time() - t0; peak = torch.cuda.max_memory_allocated() / 1e9
         w.writerow([ep + 1, *acc.tolist(), m50, m5095, sec, peak]); log.flush()
         print("epoch %2d/%d | box %.3f cls %.3f dfl %.3f | val mAP50 %.3f mAP50-95 %.3f | %.0fs | %.2fG" % (ep + 1, a.epochs, *acc.tolist(), m50, m5095, sec, peak))
+        if a.model == "b3":
+            print("   gate mean (last val batch):", [round(float(g.mean()), 3) for g in net.gates])
         if m5095 > best:
             best = m5095
             torch.save({"model": net.state_dict(), "mode": a.model, "channels": a.channels, "filtered": a.filtered,
                         "epoch": ep + 1, "map50": m50, "map5095": m5095}, os.path.join(ck, name + "_best.pt"))
-            torch.save({"model": net.state_dict(), "opt": opt.state_dict(), "scaler": scaler.state_dict(), "epoch": ep + 1, "best": best}, last)
+        torch.save({"model": net.state_dict(), "opt": opt.state_dict(), "scaler": scaler.state_dict(), "epoch": ep + 1, "best": best}, last)
     print("best val mAP50-95: %.3f | per-class AP50 (last epoch): %s" % (best, {k: round(v, 3) for k, v in per.items()}))
 
 if __name__ == "__main__":
