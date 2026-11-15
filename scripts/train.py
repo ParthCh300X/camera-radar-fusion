@@ -131,7 +131,7 @@ class Net(nn.Module):
             self.gates = [None, None, None]
 
     def forward(self, imgs, radars):
-        radars = radars * self.cmask.view(1, 3, 1, 1)
+        radars = radars[:, :3] * self.cmask.view(1, 3, 1, 1)
         if self.mode == "b0":
             return self.det(imgs)
         if self.mode == "b1":
