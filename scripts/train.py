@@ -110,6 +110,7 @@ class RadarEncoder(nn.Module):
         p3 = self.stem(r); p4 = self.s16(p3); p5 = self.s32(p4)
         self.raw = {"4": p3, "6": p4, "9": p5}
         return {"4": self.adapt["4"](p3), "6": self.adapt["6"](p4), "9": self.adapt["9"](p5)}
+
 class Net(nn.Module):
     def __init__(self, mode, channels):
         super().__init__()
@@ -131,7 +132,7 @@ class Net(nn.Module):
             self.gates = [None, None, None]
 
     def forward(self, imgs, radars):
-        radars = radars[:, :3] * self.cmask.view(1, 3, 1, 1)
+        radars = radars[:, :3] * self.cmask.view(1, 3, 1, 1)               # the 4th radar channel (bad-point map) is a training target only
         if self.mode == "b0":
             return self.det(imgs)
         if self.mode == "b1":
@@ -155,6 +156,39 @@ class Net(nn.Module):
             y.append(x if m.i in self.det.save else None)
         return x
 
+def box_mask(labs, s=8):
+    """Cells (stride s) that lie inside any ground-truth box. labs: padded-normalised labels."""
+    h, w = HP // s, W // s
+    m = torch.zeros(len(labs), 1, h, w)
+    for i, l in enumerate(labs):
+        for c, cx, cy, bw, bh in l.tolist():
+            x1 = int(max(0, np.floor((cx - bw / 2) * w))); x2 = int(min(w, np.ceil((cx + bw / 2) * w)))
+            y1 = int(max(0, np.floor((cy - bh / 2) * h))); y2 = int(min(h, np.ceil((cy + bh / 2) * h)))
+            m[i, 0, y1:y2, x1:x2] = 1.0
+    return m
+
+def aux_losses(net, aux_head, radars, labs, dev, use_gate, use_aux):
+    """Gate loss: gate -> 0 on cells whose radar was corrupted on purpose, -> 1 on good radar cells (only cells that contain radar).
+    Radar loss: the radar branch alone predicts which cells lie inside a ground-truth box."""
+    gl = torch.zeros((), device=dev); rl = torch.zeros((), device=dev)
+    r = radars.to(dev)
+    if use_gate:
+        terms = []
+        for j, s in enumerate((8, 16, 32)):
+            g = net.gates[j][:, 0].float().clamp(1e-4, 1 - 1e-4)
+            occ = F.avg_pool2d((r[:, 0:1] > 0).float(), s, s)[:, 0]
+            bad = F.avg_pool2d(r[:, 3:4], s, s)[:, 0]
+            t = (1 - bad / occ.clamp(min=1e-6)).clamp(0, 1)
+            mask = (occ > 0).float()
+            bce = -(t * torch.log(g) + (1 - t) * torch.log(1 - g))
+            terms.append((bce * mask).sum() / mask.sum().clamp(min=1))
+        gl = sum(terms) / 3
+    if use_aux:
+        logits = aux_head(net.enc.raw["4"]).float()[:, 0]
+        tgt = box_mask(labs).to(dev)[:, 0]
+        rl = F.binary_cross_entropy_with_logits(logits, tgt, pos_weight=torch.tensor(3.0, device=dev))
+    return gl, rl
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="b0", choices=["b0", "b1", "b2", "b3"])
@@ -166,6 +200,8 @@ def main():
     ap.add_argument("--overfit", action="store_true")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--aug", action="store_true")
+    ap.add_argument("--gate_sup", action="store_true")
+    ap.add_argument("--radar_aux", action="store_true")
     a = ap.parse_args()
     name = a.name or a.model
     torch.manual_seed(0); np.random.seed(0)
@@ -176,8 +212,13 @@ def main():
     tl = DataLoader(tr, batch_size=a.batch, shuffle=True, collate_fn=collate, num_workers=4, drop_last=True)
     vl = DataLoader(va, batch_size=a.batch, shuffle=False, collate_fn=collate, num_workers=2)
     net = Net(a.model, a.channels).to(dev); crit = v8DetectionLoss(net.det)
-    print("model %s | channels %s | filtered %s | parameters %.2f M" % (a.model, a.channels, a.filtered, sum(p.numel() for p in net.parameters()) / 1e6))
-    opt = torch.optim.AdamW(net.parameters(), lr=1.4e-3, weight_decay=5e-4)
+    use_gate = a.gate_sup and a.model == "b3"
+    use_aux = a.radar_aux and a.model in ("b2", "b3")
+    aux_head = nn.Conv2d(64, 1, 1).to(dev) if use_aux else None
+    print("model %s | channels %s | filtered %s | parameters %.2f M | gate_sup %s | radar_aux %s" % (
+        a.model, a.channels, a.filtered, sum(p.numel() for p in net.parameters()) / 1e6, use_gate, use_aux))
+    params = list(net.parameters()) + (list(aux_head.parameters()) if aux_head is not None else [])
+    opt = torch.optim.AdamW(params, lr=1.4e-3, weight_decay=5e-4)
     scaler = torch.amp.GradScaler("cuda")
     total = a.epochs * len(tl); step = 0; best = -1.0
     ck = os.path.join(PROJ, "outputs", "checkpoints"); lg = os.path.join(PROJ, "outputs", "logs"); os.makedirs(ck, exist_ok=True)
@@ -188,9 +229,11 @@ def main():
         for it in range(150):
             with torch.autocast("cuda"):
                 loss, items = crit(net(imgs.to(dev), radars.to(dev)), loss_batch(labs, dev))
-            opt.zero_grad(); scaler.scale(loss).backward(); scaler.step(opt); scaler.update()
+                gl, rl = aux_losses(net, aux_head, radars, labs, dev, use_gate, use_aux)
+            total_loss = loss + (2.0 * gl + 1.0 * rl) * len(imgs)
+            opt.zero_grad(); scaler.scale(total_loss).backward(); scaler.step(opt); scaler.update()
             if it % 15 == 0 or it == 149:
-                print("iter %3d | box %.3f cls %.3f dfl %.3f" % (it, *items.tolist()))
+                print("iter %3d | box %.3f cls %.3f dfl %.3f | gate_loss %.3f radar_loss %.3f" % (it, *items.tolist(), float(gl), float(rl)))
         return
 
     torch.cuda.reset_peak_memory_stats()
@@ -199,13 +242,15 @@ def main():
     if resuming:
         s = torch.load(last, map_location="cpu", weights_only=False)
         net.load_state_dict(s["model"]); opt.load_state_dict(s["opt"]); scaler.load_state_dict(s["scaler"])
+        if aux_head is not None and s.get("aux") is not None:
+            aux_head.load_state_dict(s["aux"])
         start_ep, best = s["epoch"], s["best"]; step = start_ep * len(tl)
         print("resuming from epoch", start_ep)
     log = open(os.path.join(lg, name + "_log.csv"), "a" if resuming else "w", newline=""); w = csv.writer(log)
     if not resuming:
         w.writerow(["epoch", "train_box", "train_cls", "train_dfl", "val_map50", "val_map5095", "sec", "peak_gb"])
     for ep in range(start_ep, a.epochs):
-        net.train(); t0 = time.time(); acc = torch.zeros(3)
+        net.train(); t0 = time.time(); acc = torch.zeros(3); acc2 = torch.zeros(2)
         for imgs, radars, labs, _ in tl:
             lr_scale = min(1.0, (step + 1) / (3 * len(tl))) * (0.01 + 0.99 * 0.5 * (1 + np.cos(np.pi * step / total)))
             for g in opt.param_groups: g["lr"] = 1.4e-3 * lr_scale
@@ -219,19 +264,24 @@ def main():
             imgs, radars = pad_batch(imgs, radars); labs = [norm_labels(l) for l in labs]
             with torch.autocast("cuda"):
                 loss, items = crit(net(imgs.to(dev), radars.to(dev)), loss_batch(labs, dev))
-            opt.zero_grad(); scaler.scale(loss).backward(); scaler.step(opt); scaler.update()
-            acc += items.cpu(); step += 1
+                gl, rl = aux_losses(net, aux_head, radars, labs, dev, use_gate, use_aux)
+            total_loss = loss + (2.0 * gl + 1.0 * rl) * len(imgs)
+            opt.zero_grad(); scaler.scale(total_loss).backward(); scaler.step(opt); scaler.update()
+            acc += items.cpu(); acc2 += torch.tensor([float(gl), float(rl)]); step += 1
         m50, m5095, per = evaluate(net, vl, dev)
-        acc /= len(tl); sec = time.time() - t0; peak = torch.cuda.max_memory_allocated() / 1e9
+        acc /= len(tl); acc2 /= len(tl); sec = time.time() - t0; peak = torch.cuda.max_memory_allocated() / 1e9
         w.writerow([ep + 1, *acc.tolist(), m50, m5095, sec, peak]); log.flush()
         print("epoch %2d/%d | box %.3f cls %.3f dfl %.3f | val mAP50 %.3f mAP50-95 %.3f | %.0fs | %.2fG" % (ep + 1, a.epochs, *acc.tolist(), m50, m5095, sec, peak))
+        if use_gate or use_aux:
+            print("   aux losses: gate %.3f radar %.3f" % tuple(acc2.tolist()))
         if a.model == "b3":
             print("   gate mean (last val batch):", [round(float(g.mean()), 3) for g in net.gates])
         if m5095 > best:
             best = m5095
             torch.save({"model": net.state_dict(), "mode": a.model, "channels": a.channels, "filtered": a.filtered,
                         "epoch": ep + 1, "map50": m50, "map5095": m5095}, os.path.join(ck, name + "_best.pt"))
-        torch.save({"model": net.state_dict(), "opt": opt.state_dict(), "scaler": scaler.state_dict(), "epoch": ep + 1, "best": best}, last)
+        torch.save({"model": net.state_dict(), "opt": opt.state_dict(), "scaler": scaler.state_dict(), "epoch": ep + 1, "best": best,
+                    "aux": aux_head.state_dict() if aux_head is not None else None}, last)
     print("best val mAP50-95: %.3f | per-class AP50 (last epoch): %s" % (best, {k: round(v, 3) for k, v in per.items()}))
 
 if __name__ == "__main__":
