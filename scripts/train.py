@@ -202,9 +202,10 @@ def main():
     ap.add_argument("--aug", action="store_true")
     ap.add_argument("--gate_sup", action="store_true")
     ap.add_argument("--radar_aux", action="store_true")
+    ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     name = a.name or a.model
-    torch.manual_seed(0); np.random.seed(0)
+    torch.manual_seed(a.seed); np.random.seed(a.seed)
     dev = torch.device("cuda")
     root = os.path.join(PROJ, "data", "processed", "subset")
     cor = keep_valid if a.filtered else None

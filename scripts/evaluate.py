@@ -8,10 +8,10 @@ from torch.utils.data import DataLoader
 from ultralytics.utils.ops import non_max_suppression
 from ultralytics.utils.metrics import ap_per_class
 from src.dataset import FusionDataset, collate
-from src.corruptions import make_corruption
 from src.corruptions import make_corruption, ALL_CONDITIONS
 
 ROOT = os.path.join(PROJ, "data", "processed", "subset")
+CAM_GAIN = {"dark": 0.3, "darker": 0.15}
 
 def load(name, dev):
     ck = torch.load(os.path.join(PROJ, "outputs", "checkpoints", name + "_best.pt"), map_location="cpu", weights_only=False)
@@ -30,13 +30,16 @@ def score(rows):
     return float(ap[:, 0].mean()), float(ap.mean()), {T.NAMES[int(c)]: float(ap[i, 0]) for i, c in enumerate(cl)}
 
 @torch.no_grad()
-def run(net, filt, split, kind, level, dev, batch):
+def run(net, filt, split, kind, level, dev, batch, cam="none"):
     corr = make_corruption(kind, level)
     f = (lambda P: T.keep_valid(corr(P))) if filt else corr
     ds = FusionDataset(ROOT, split, corrupt=f)
     cond = {it["token"]: it["condition"] for it in ds.items}
     rows = []
+    gen = torch.Generator().manual_seed(0)
     for imgs, radars, labs, toks in DataLoader(ds, batch_size=batch, shuffle=False, collate_fn=collate, num_workers=0):
+        if cam != "none":
+            imgs = (imgs * CAM_GAIN[cam] + torch.randn(imgs.shape, generator=gen) * 0.03).clamp(0, 1)
         imgs, radars = T.pad_batch(imgs, radars)
         dets = non_max_suppression(net(imgs.to(dev), radars.to(dev)), conf_thres=0.001, iou_thres=0.7, max_det=300)
         for d, l, tk in zip(dets, labs, toks):
@@ -51,26 +54,27 @@ def run(net, filt, split, kind, level, dev, batch):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="+", required=True)
-    ap.add_argument("--conds", nargs="+", default=["clean"])      # clean or kind:level, e.g. dropout:complete
+    ap.add_argument("--conds", nargs="+", default=["clean"])      # "all", or clean / kind:level, e.g. dropout:complete
     ap.add_argument("--split", default="val")
+    ap.add_argument("--cam", default="none", choices=["none", "dark", "darker"])
     ap.add_argument("--final", action="store_true")
     ap.add_argument("--batch", type=int, default=16)
     a = ap.parse_args()
-    conds = ["clean" if k == "clean" else "%s:%s" % (k, l) for k, l in ALL_CONDITIONS] if a.conds == ["all"] else a.conds
     if a.split == "test" and not a.final:
         sys.exit("The test split is for the final evaluation only: add --final if this is it.")
+    conds = ["clean" if k == "clean" else "%s:%s" % (k, l) for k, l in ALL_CONDITIONS] if a.conds == ["all"] else a.conds
     dev = torch.device("cuda")
-    out = os.path.join(PROJ, "outputs", "logs", "eval_%s.csv" % a.split)
+    out = os.path.join(PROJ, "outputs", "logs", "eval_%s%s.csv" % (a.split, "" if a.cam == "none" else "_" + a.cam))
     new = not os.path.exists(out)
     f = open(out, "a", newline=""); w = csv.writer(f)
     if new:
         w.writerow(["split", "model", "kind", "level", "map50", "map5095", "car", "pedestrian", "truck", "clear", "rain", "night"])
-    print("%-12s %-18s | mAP50 mAP50-95 | car   ped   truck | clear rain  night" % ("model", "condition"))
+    print("camera: %s | model, condition | mAP50 mAP50-95 | car ped truck | clear rain night" % a.cam)
     for name in a.models:
         net, filt = load(name, dev)
         for c in conds:
             kind, level = (c.split(":") + [None])[:2]
-            m50, m5095, per, byc = run(net, filt, a.split, kind, level, dev, a.batch)
+            m50, m5095, per, byc = run(net, filt, a.split, kind, level, dev, a.batch, a.cam)
             print("%-12s %-18s | %.3f  %.3f    | %.3f %.3f %.3f | %.3f %.3f %.3f" % (
                 name, c, m50, m5095, per.get("car", np.nan), per.get("pedestrian", np.nan), per.get("truck", np.nan),
                 byc["clear"], byc["rain"], byc["night"]))
